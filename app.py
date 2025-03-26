@@ -33,41 +33,46 @@ def query_huggingface(prompt):
     except:
         return [{"generated_text": "[Error in response]"}]
 
-# Chat state
+# 세션 메시지 초기화
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 💬 Render chat history (before input)
-st.divider()
-for sender, msg in st.session_state.messages:
-    with st.chat_message("user" if sender == "You" else "assistant"):
-        if sender == "Bot":
-            response_placeholder = st.empty()
-            streamed = ""
-            for word in msg.split():
-                streamed += word + " "
-                response_placeholder.markdown(streamed)
-                time.sleep(0.03)
-        else:
-            st.markdown(msg)
-
-# 📝 Input below the chat
+# 입력 폼 (채팅 아래쪽에 위치)
 with st.form("chat_form", clear_on_submit=True):
     user_input = st.text_input("You:")
     submitted = st.form_submit_button("Send")
 
+# 이전 메시지 출력 (최신이 아래로)
+for sender, msg in st.session_state.messages:
+    with st.chat_message("user" if sender == "You" else "assistant"):
+        st.markdown(msg)
+
+# 새 메시지 처리
 if submitted and user_input:
-    # Append user input first
+    # 1. 유저 메시지 즉시 렌더링
+    with st.chat_message("user"):
+        st.markdown(user_input)
+
+    # 2. 메시지 세션에 추가
     st.session_state.messages.append(("You", user_input))
 
-    # ⛔️ Avoid repeating user_input — build context from previous only
-    context = " ".join(
-        [msg for sender, msg in st.session_state.messages[-6:-2] if sender == "You"]
-    )
-    prompt = context.strip()
+    # 3. context 만들기 (최근 대화 3개)
+    context = " ".join([msg for sender, msg in st.session_state.messages[-6:] if sender == "You"])
+    prompt = context.strip() or user_input
 
-    with st.spinner("Thinking..."):
-        result = query_huggingface(prompt if prompt else user_input)
-        reply = result[0].get("generated_text", "[No response]") if isinstance(result, list) else str(result)
+    # 4. API 호출
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            result = query_huggingface(prompt)
+            reply = result[0].get("generated_text", "[No response]") if isinstance(result, list) else str(result)
 
+        # 5. 스트리밍 출력
+        response_placeholder = st.empty()
+        streamed = ""
+        for word in reply.split():
+            streamed += word + " "
+            response_placeholder.markdown(streamed)
+            time.sleep(0.03)
+
+    # 6. 응답 저장
     st.session_state.messages.append(("Bot", reply))
