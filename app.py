@@ -43,10 +43,14 @@ if "messages" not in st.session_state or clear:
 if "user_input" not in st.session_state:
     st.session_state.user_input = ""
 
-# Chat input
-user_input = st.text_input("You:", key="user_input")
+# Input field
+user_input = st.text_input("You:", value=st.session_state.user_input, key="user_input")
 
-if user_input:
+if user_input and not st.session_state.get("input_sent", False):
+    # Mark as submitted to prevent repeat
+    st.session_state.input_sent = True
+
+    # Context
     context = " ".join([msg for sender, msg in st.session_state.messages[-4:] if sender == "You"])
     full_input = context + " " + user_input if context else user_input
 
@@ -54,14 +58,18 @@ if user_input:
         result = query(full_input)
         reply = result[0].get("generated_text", "[No response]") if isinstance(result, list) else str(result)
 
-    # Append messages
+    # Save messages
     st.session_state.messages.append(("You", user_input))
     st.session_state.messages.append(("Bot", reply))
 
     # Clear input
     st.session_state.user_input = ""
 
-# Message display (streaming)
+# Cleanup submit flag after render
+if "input_sent" in st.session_state:
+    del st.session_state.input_sent
+
+# Render messages
 st.divider()
 for sender, msg in st.session_state.messages[::-1]:
     with st.chat_message("user" if sender == "You" else "assistant"):
